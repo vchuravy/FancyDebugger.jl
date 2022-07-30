@@ -57,7 +57,7 @@ end
 end
 
 @noinline g_barrier() = Base.inferencebarrier(1)
-Base.Experimental.@overlay FancyDebugger.GLOBAL_METHOD_TABLE g_barrier() = 2
+Base.Experimental.@overlay FancyDebugger.GLOBAL_METHOD_TABLE @noinline g_barrier() = Base.inferrencebarrier(2)
 
 f_barrier() = g_barrier()
 
