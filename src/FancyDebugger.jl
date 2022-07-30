@@ -9,10 +9,10 @@ export @breakpoint, debug
 import GPUCompiler: CodeCache, invalidate
 const GLOBAL_CI_CACHE = CodeCache()
 
-import Core: MethodMatch
+import Core: MethodMatch, MethodTable
 import Core.Compiler: _methods_by_ftype, InferenceParams, get_world_counter, MethodInstance,
     specialize_method, InferenceResult, typeinf, InferenceState, NativeInterpreter,
-    code_cache, AbstractInterpreter, OptimizationParams, WorldView
+    code_cache, AbstractInterpreter, OptimizationParams, WorldView, MethodTableView
 
 import Debugger
 
@@ -63,15 +63,34 @@ Core.Compiler.unlock_mi_inference(interp::DebugInterpreter, mi::MethodInstance) 
 Core.Compiler.may_optimize(interp::DebugInterpreter) = true
 Core.Compiler.may_compress(interp::DebugInterpreter) = true
 Core.Compiler.may_discard_trees(interp::DebugInterpreter) = true
-if VERSION >= v"1.7.0-DEV.577"
 Core.Compiler.verbose_stmt_info(interp::DebugInterpreter) = false
-end
 
 using Core.Compiler: OverlayMethodTable
 Core.Compiler.method_table(interp::DebugInterpreter) =
     OverlayMethodTable(interp.world, interp.method_table)
 
 Base.Experimental.@MethodTable(GLOBAL_METHOD_TABLE)
+
+##
+# MethodTable extensions 
+
+function delete!(mt::Core.MethodTable, m::Method)
+    ccall(:jl_method_table_disable, Cvoid, (Any, Any), mt, m)
+end
+
+function whichtt(mt::MethodTable, sig)
+    mtv = OverlayMethodTable(Base.get_world_counter(), mt)
+    whichtt(mtv, sig)
+end
+
+function whichtt(mtv::MethodTableView, sig)
+    match, valid_worlds, overlayed = Core.Compiler.findsup(sig, mtv)
+    match === nothing && return nothing
+    return match.method
+end
+
+#
+##
 
 ##
 # Future: CompilerPlugins.jl
@@ -86,8 +105,11 @@ end
 function construct_oc_in_absint(f, interp, args...)
     @nospecialize f args
     tt = Base.signature_type(f, Tuple{map(Core.Typeof, args)...})
-    mm = get_single_method_match(tt, InferenceParams(interp).MAX_METHODS, get_world_counter(interp))
-    mi = specialize_method(mm.method, mm.spec_types, mm.sparams)::MethodInstance
+    match, valid_worlds, overlayed = Core.Compiler.findsup(tt, Core.Compiler.method_table(interp))
+    if match === nothing
+        error(lazy"Unable to find matching $tt")
+    end
+    mi = specialize_method(match.method, match.spec_types, match.sparams)::MethodInstance
     code = Core.Compiler.get(code_cache(interp), mi, nothing)
     if code !== nothing
         inf = code.inferred::Vector{UInt8}
