@@ -83,6 +83,15 @@ Core.Compiler.method_table(interp::DebugInterpreter) =
 
 Base.Experimental.@MethodTable(GLOBAL_METHOD_TABLE)
 
+Base.Experimental.@overlay GLOBAL_METHOD_TABLE function Base.invokelatest(f, args...; kwargs...)
+    kwargs = merge(NamedTuple(), kwargs)
+    if isempty(kwargs)
+        return Core._call_latest(debug, f, args...)
+    end
+    error("FancyDebugger doesn't support kwargs yet")
+    # return Core._call_latest(Core.kwfunc(f), kwargs, f, args...)
+end
+
 ##
 # MethodTable extensions 
 
