@@ -18,7 +18,7 @@ export @breakpoint, debug
 #
 #  Needs a StackedMethodTable so that we can compose compiler plugins.  
 
-import GPUCompiler: CodeCache, invalidate
+include("codecache.jl")
 const GLOBAL_CI_CACHE = CodeCache()
 
 import Core: MethodMatch, MethodTable
@@ -74,7 +74,7 @@ Core.Compiler.unlock_mi_inference(interp::DebugInterpreter, mi::MethodInstance) 
 
 Core.Compiler.may_optimize(interp::DebugInterpreter) = true
 Core.Compiler.may_compress(interp::DebugInterpreter) = true
-Core.Compiler.may_discard_trees(interp::DebugInterpreter) = true
+Core.Compiler.may_discard_trees(interp::DebugInterpreter) = false
 Core.Compiler.verbose_stmt_info(interp::DebugInterpreter) = false
 
 using Core.Compiler: OverlayMethodTable
@@ -126,13 +126,13 @@ function construct_oc_in_absint(f, interp, args...)
     if code !== nothing
         inf = code.inferred::Vector{UInt8}
         ci = Base._uncompressed_ir(code, inf)
-        return Core.OpaqueClosure(ci)
+        return Core.OpaqueClosure(ci) # TODO cache
     end
     result = InferenceResult(mi)
     frame = InferenceState(result, #=cache=# :global, interp)
     typeinf(interp, frame)
     ci = frame.src
-    return Core.OpaqueClosure(ci)
+    return Core.OpaqueClosure(ci) # TODO cache
 end
 
 function get_single_method_match(@nospecialize(tt), lim, world)
