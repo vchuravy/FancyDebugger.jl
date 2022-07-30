@@ -21,10 +21,11 @@ export @breakpoint, debug
 include("codecache.jl")
 const GLOBAL_CI_CACHE = CodeCache()
 
-import Core: MethodMatch, MethodTable
+import Core: MethodMatch, MethodTable, CodeInfo
 import Core.Compiler: _methods_by_ftype, InferenceParams, get_world_counter, MethodInstance,
     specialize_method, InferenceResult, typeinf, InferenceState, NativeInterpreter,
-    code_cache, AbstractInterpreter, OptimizationParams, WorldView, MethodTableView
+    code_cache, AbstractInterpreter, OptimizationState, OptimizationParams, WorldView, MethodTableView
+
 
 import Debugger
 
@@ -48,7 +49,6 @@ struct DebugInterpreter <: AbstractInterpreter
         return new(
             cache,
             mt,
-
             # Initially empty cache
             Vector{InferenceResult}(),
 
@@ -80,6 +80,31 @@ Core.Compiler.verbose_stmt_info(interp::DebugInterpreter) = false
 using Core.Compiler: OverlayMethodTable
 Core.Compiler.method_table(interp::DebugInterpreter) =
     OverlayMethodTable(interp.world, interp.method_table)
+
+import Core.Compiler: optimize
+function optimize(interp::DebugInterpreter, opt::OptimizationState,
+                  params::OptimizationParams, caller::InferenceResult)
+    ir = Core.Compiler.run_passes(opt.src, opt, caller)
+    Core.Compiler.finish(interp, opt, params, ir, caller)
+end
+
+function infect!(interp, ir)
+    for idx in 1:length(ir.stmts)
+        if ir.stmts[idx][:inst] == GlobalRef(Core, :_call_latest)
+            Core.Compiler.setindex!(ir.stmts[idx], GlobalRef(@__MODULE__, :call_latest), :inst)
+            Core.Compiler.setindex!(ir.stmts[idx], Core.Const(call_latest), :type)
+        end
+    end
+    @show ir
+end
+
+# struct CallLatest{Interp}
+#     interp::Interp
+# end
+
+function call_latest(f, args...)
+    @show f, args...
+end
 
 Base.Experimental.@MethodTable(GLOBAL_METHOD_TABLE)
 
