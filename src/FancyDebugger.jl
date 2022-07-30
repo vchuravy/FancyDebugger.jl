@@ -5,6 +5,18 @@ export @breakpoint, debug
 # TODO: 
 # - Doesn't deal with dynamic dispatch yet, we need to replace Expr(:call, ) with a call in AbsInt
 # - Invalidations (e.g. turn breakpoints on/off, contract worldage )
+#
+# Notes:
+# - JuliaInterpreter.jl ignores AbsstractInterpreter, this is a bug, but currently necessary for this to work.
+#   otherwise we would need to switch back to the NativeInterpreter before executing the code we want to debug.
+#
+# - CompilerPlugin design
+#
+#  contextual(DebugPlugin()) do
+#     f()
+#  end
+#
+#  Needs a StackedMethodTable so that we can compose compiler plugins.  
 
 import GPUCompiler: CodeCache, invalidate
 const GLOBAL_CI_CACHE = CodeCache()
